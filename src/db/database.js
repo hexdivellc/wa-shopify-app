@@ -254,7 +254,17 @@ db.exec(`
   );
 `);
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Migrations — safely add new columns to existing databases ─────────────────
+const migrations = [
+  "ALTER TABLE team_members ADD COLUMN must_change_pw INTEGER DEFAULT 0",
+  "ALTER TABLE team_members ADD COLUMN shop_domain TEXT DEFAULT '*'",
+  "ALTER TABLE team_sessions DROP COLUMN shop_domain",
+  "ALTER TABLE shops ADD COLUMN shop_name TEXT",
+  "ALTER TABLE shops ADD COLUMN active INTEGER DEFAULT 1",
+];
+for (const sql of migrations) {
+  try { db.exec(sql); } catch(e) { /* column already exists — ignore */ }
+}
 const j  = v => JSON.stringify(v);
 const pj = v => { try { return JSON.parse(v || '[]'); } catch(e) { return v; } };
 
