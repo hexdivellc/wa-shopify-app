@@ -12,7 +12,7 @@ function setupAuthRoutes(app, db) {
     const existing = db.db.prepare("SELECT id FROM team_members WHERE role='admin' LIMIT 1").get();
     if (!existing) {
       db.db.prepare(`INSERT OR IGNORE INTO team_members (name,email,password_hash,role,must_change_pw,shop_domain)
-        VALUES ('Admin','admin@wabot.com',?,'admin',1,'*')`).run(hashPw('admin123'));
+        VALUES ('Admin','admin@wabot.com',?,'admin',0,'*')`).run(hashPw('admin123'));
       console.log('Created default admin: admin@wabot.com / admin123');
     }
   }
