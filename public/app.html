@@ -264,7 +264,7 @@ input:checked+.toggle-slider:before{transform:translateX(14px);background:#000}
   <div class="login-card">
     <div class="login-logo">&#9889; WA Bot</div>
     <div class="login-sub">Sign in to your dashboard</div>
-    <div class="login-error" id="login-error"></div>
+    <div class="login-error" id="login-error" style="display:block;min-height:20px">Ready — enter credentials and click Sign in</div>
     <div class="form-group">
       <label class="form-label">Email</label>
       <input class="form-input" id="login-email" type="email" placeholder="your@email.com" onkeydown="if(event.key==='Enter')doLogin()">
@@ -273,7 +273,8 @@ input:checked+.toggle-slider:before{transform:translateX(14px);background:#000}
       <label class="form-label">Password</label>
       <input class="form-input" id="login-password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
-    <button class="login-btn" onclick="doLogin()">Sign in</button>
+    <button class="login-btn" onclick="console.log('clicked');doLogin()">Sign in</button>
+    <div id="js-test" style="font-size:11px;color:var(--hint);margin-top:8px;text-align:center">JS not loaded</div>
   </div>
 </div>
 
@@ -779,6 +780,8 @@ var charts={};
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
 function init(){
+  var jt = document.getElementById('js-test');
+  if(jt) jt.textContent = 'JS loaded OK';
   document.getElementById('webhook-url').textContent = window.location.origin+'/webhook/whatsapp';
   if(AUTH_TOKEN){ verifySession(); } else { showLogin(); }
 }
@@ -819,26 +822,36 @@ async function doLogin(){
   var email = document.getElementById('login-email').value.trim();
   var password = document.getElementById('login-password').value;
   var errEl = document.getElementById('login-error');
-  errEl.style.display='none';
-  if(!email||!password){ errEl.textContent='Email and password required'; errEl.style.display='block'; return; }
+  if(!email||!password){
+    errEl.textContent='Email and password required';
+    errEl.style.cssText='display:block;background:#450a0a;color:#ef4444;padding:8px;border-radius:7px';
+    return;
+  }
+  errEl.textContent='Signing in...';
+  errEl.style.cssText='display:block;background:#172554;color:#93c5fd;padding:8px;border-radius:7px';
   try{
-    errEl.textContent='Signing in...'; errEl.style.display='block'; errEl.style.background='var(--bg3)'; errEl.style.color='var(--muted)';
-    var r = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:password})});
-    var d = await r.json();
+    var r = await fetch('/api/auth/login',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:email,password:password})
+    });
+    var txt = await r.text();
+    var d;
+    try{ d=JSON.parse(txt); }catch(e){ errEl.textContent='Bad response: '+txt.substring(0,100); errEl.style.cssText='display:block;background:#450a0a;color:#ef4444;padding:8px;border-radius:7px'; return; }
     if(!r.ok){
-      errEl.textContent=d.error||'Login failed ('+r.status+')';
-      errEl.style.background=''; errEl.style.color='';
-      errEl.style.display='block'; return;
+      errEl.textContent='Error '+r.status+': '+(d.error||'Login failed');
+      errEl.style.cssText='display:block;background:#450a0a;color:#ef4444;padding:8px;border-radius:7px';
+      return;
     }
     AUTH_TOKEN = d.token; CURRENT_USER = d.member;
     localStorage.setItem('wabot_token', AUTH_TOKEN);
     updateUserUI();
-    errEl.style.display='none';
+    errEl.textContent='Login OK! Loading dashboard...';
+    errEl.style.cssText='display:block;background:#052e16;color:#4ade80;padding:8px;border-radius:7px';
     if(CURRENT_USER.must_change_pw){ showChangePw(); } else { showApp(); }
   }catch(e){
-    errEl.textContent='Connection error: '+e.message;
-    errEl.style.background=''; errEl.style.color='';
-    errEl.style.display='block';
+    errEl.textContent='Fetch error: '+e.message;
+    errEl.style.cssText='display:block;background:#450a0a;color:#ef4444;padding:8px;border-radius:7px';
   }
 }
 
