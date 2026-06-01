@@ -819,14 +819,24 @@ async function doLogin(){
   errEl.style.display='none';
   if(!email||!password){ errEl.textContent='Email and password required'; errEl.style.display='block'; return; }
   try{
-    var r = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+    errEl.textContent='Signing in...'; errEl.style.display='block'; errEl.style.background='var(--bg3)'; errEl.style.color='var(--muted)';
+    var r = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:password})});
     var d = await r.json();
-    if(!r.ok){ errEl.textContent=d.error||'Login failed'; errEl.style.display='block'; return; }
+    if(!r.ok){
+      errEl.textContent=d.error||'Login failed ('+r.status+')';
+      errEl.style.background=''; errEl.style.color='';
+      errEl.style.display='block'; return;
+    }
     AUTH_TOKEN = d.token; CURRENT_USER = d.member;
     localStorage.setItem('wabot_token', AUTH_TOKEN);
     updateUserUI();
+    errEl.style.display='none';
     if(CURRENT_USER.must_change_pw){ showChangePw(); } else { showApp(); }
-  }catch(e){ errEl.textContent='Connection error'; errEl.style.display='block'; }
+  }catch(e){
+    errEl.textContent='Connection error: '+e.message;
+    errEl.style.background=''; errEl.style.color='';
+    errEl.style.display='block';
+  }
 }
 
 async function doChangePw(){

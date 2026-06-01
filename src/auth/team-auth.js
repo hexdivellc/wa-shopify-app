@@ -14,6 +14,9 @@ function setupAuthRoutes(app, db) {
       db.db.prepare(`INSERT OR IGNORE INTO team_members (name,email,password_hash,role,must_change_pw,shop_domain)
         VALUES ('Admin','admin@wabot.com',?,'admin',0,'*')`).run(hashPw('admin123'));
       console.log('Created default admin: admin@wabot.com / admin123');
+    } else {
+      // Always ensure admin can log in — reset must_change_pw if still set
+      db.db.prepare("UPDATE team_members SET must_change_pw=0 WHERE id=? AND must_change_pw=1").run(existing.id);
     }
   }
   ensureSuperAdmin();
