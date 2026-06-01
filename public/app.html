@@ -811,11 +811,17 @@ function showApp(){
 
 async function verifySession(){
   try{
-    var me = await api('GET','/api/auth/me');
+    var r = await fetch('/api/auth/me', { headers: { 'Content-Type':'application/json', 'x-auth-token': AUTH_TOKEN } });
+    if(r.status === 401){ AUTH_TOKEN=''; localStorage.removeItem('wabot_token'); showLogin(); return; }
+    var me = await r.json();
     CURRENT_USER = me.member;
     updateUserUI();
-    if(CURRENT_USER.must_change_pw){ showChangePw(); } else { showApp(); }
-  }catch(e){ AUTH_TOKEN=''; localStorage.removeItem('wabot_token'); showLogin(); }
+    if(CURRENT_USER && CURRENT_USER.must_change_pw){ showChangePw(); } else { showApp(); }
+  }catch(e){
+    // Network error — still show app with cached token, it may work
+    console.warn('verifySession error:', e.message);
+    showApp();
+  }
 }
 
 async function doLogin(){

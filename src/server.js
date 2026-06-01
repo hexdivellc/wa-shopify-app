@@ -152,62 +152,115 @@ app.post('/api/automations', requireAuth(['admin']), function(req, res) {
   res.json({ ok: true });
 });
 
+// ── Helper to get shop from active domain ──────────────────────────────────────
+function getActiveShop(req) {
+  return req.activeDomain || req.headers['x-active-shop'] || null;
+}
+
 // ── Conversations ──────────────────────────────────────────────────────────────
-app.get('/api/conversations', requireShop, function(req, res) { res.json(db.getAllConversations(req.shopDomain)); });
-app.get('/api/conversations/:phone', requireShop, function(req, res) { res.json(db.getConversation(req.shopDomain, decodeURIComponent(req.params.phone))); });
-app.post('/api/conversations/:phone/reply', requireShop, async function(req, res) {
+app.get('/api/conversations', requireAuth(), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.json([]);
+  res.json(db.getAllConversations(domain));
+});
+app.get('/api/conversations/:phone', requireAuth(), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.json([]);
+  res.json(db.getConversation(domain, decodeURIComponent(req.params.phone)));
+});
+app.post('/api/conversations/:phone/reply', requireAuth(['admin','agent']), async function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
   const phone = decodeURIComponent(req.params.phone);
   const text = req.body.text;
   if (!text) return res.status(400).json({ error: 'text required' });
-  await sendMessage(phone, text, req.shop);
-  db.saveMessage(req.shopDomain, { phone: phone, direction: 'outbound', text: text, ai_provider: 'manual' });
+  const shop = db.getShop(domain);
+  await sendMessage(phone, text, shop);
+  db.saveMessage(domain, { phone, direction: 'outbound', text, ai_provider: 'manual' });
   res.json({ ok: true });
 });
-app.post('/api/conversations/:phone/ai-mode', requireShop, function(req, res) {
-  db.setAIMode(req.shopDomain, decodeURIComponent(req.params.phone), req.body.ai_enabled);
+app.post('/api/conversations/:phone/ai-mode', requireAuth(['admin','agent']), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
+  db.setAIMode(domain, decodeURIComponent(req.params.phone), req.body.ai_enabled);
   res.json({ ok: true });
 });
-app.post('/api/conversations/:phone/escalate', requireShop, function(req, res) {
-  db.setEscalated(req.shopDomain, decodeURIComponent(req.params.phone), req.body.escalated);
+app.post('/api/conversations/:phone/escalate', requireAuth(['admin','agent']), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
+  db.setEscalated(domain, decodeURIComponent(req.params.phone), req.body.escalated);
   res.json({ ok: true });
 });
 
 // ── WA Orders ──────────────────────────────────────────────────────────────────
-app.get('/api/wa-orders', requireShop, function(req, res) { res.json(db.getWAOrders(req.shopDomain, req.query.status || null)); });
-app.get('/api/wa-orders/phone/:phone', requireShop, function(req, res) { res.json(db.getOrdersByPhone(req.shopDomain, decodeURIComponent(req.params.phone))); });
-app.patch('/api/wa-orders/:id/status', requireShop, async function(req, res) {
-  const order = db.updateOrderStatus(req.shopDomain, req.params.id, req.body.status);
+app.get('/api/wa-orders', requireAuth(), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.json([]);
+  res.json(db.getWAOrders(domain, req.query.status || null));
+});
+app.get('/api/wa-orders/phone/:phone', requireAuth(), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.json([]);
+  res.json(db.getOrdersByPhone(domain, decodeURIComponent(req.params.phone)));
+});
+app.patch('/api/wa-orders/:id/status', requireAuth(['admin','agent']), async function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
+  const order = db.updateOrderStatus(domain, req.params.id, req.body.status);
   if (order && order.phone) {
+    const shop = db.getShop(domain);
     const msgs = { packed: 'Your order #' + order.order_number + ' is packed and on its way!', delivered: 'Your order #' + order.order_number + ' delivered! Thank you', cancelled: 'Your order #' + order.order_number + ' has been cancelled.' };
-    if (msgs[req.body.status]) await sendMessage(order.phone, msgs[req.body.status], req.shop);
+    if (msgs[req.body.status]) await sendMessage(order.phone, msgs[req.body.status], shop);
   }
   res.json({ ok: true });
 });
 
 // ── Products ───────────────────────────────────────────────────────────────────
-app.get('/api/products', requireShop, function(req, res) { res.json(db.getProducts(req.shopDomain)); });
-app.post('/api/products', requireShop, function(req, res) { db.addProduct(req.shopDomain, req.body); res.json({ ok: true }); });
-app.patch('/api/products/:id', requireShop, function(req, res) { db.updateProduct(req.shopDomain, req.params.id, req.body); res.json({ ok: true }); });
-app.delete('/api/products/:id', requireShop, function(req, res) { db.deleteProduct(req.shopDomain, req.params.id); res.json({ ok: true }); });
-app.post('/api/sync/shopify', requireShop, async function(req, res) {
-  const result = await syncShopifyProducts(req.shopDomain, req.shopDomain, req.shop.access_token);
+app.get('/api/products', requireAuth(), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.json([]);
+  res.json(db.getProducts(domain));
+});
+app.post('/api/products', requireAuth(['admin']), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
+  db.addProduct(domain, req.body); res.json({ ok: true });
+});
+app.patch('/api/products/:id', requireAuth(['admin']), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
+  db.updateProduct(domain, req.params.id, req.body); res.json({ ok: true });
+});
+app.delete('/api/products/:id', requireAuth(['admin']), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
+  db.deleteProduct(domain, req.params.id); res.json({ ok: true });
+});
+app.post('/api/sync/shopify', requireAuth(['admin']), async function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
+  const shop = db.getShop(domain);
+  const result = await syncShopifyProducts(domain, domain, shop && shop.access_token);
   res.json(result);
 });
 
 // ── Broadcasts ─────────────────────────────────────────────────────────────────
-app.get('/api/broadcasts', requireShop, function(req, res) { res.json(db.getBroadcasts(req.shopDomain)); });
-app.post('/api/broadcasts', requireShop, function(req, res) { res.json(db.createBroadcast(req.shopDomain, req.body)); });
-app.post('/api/broadcasts/:id/send', requireShop, function(req, res) {
+app.get('/api/broadcasts', requireAuth(), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.json([]);
+  res.json(db.getBroadcasts(domain));
+});
+app.post('/api/broadcasts', requireAuth(['admin','agent']), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
+  res.json(db.createBroadcast(domain, req.body));
+});
+app.post('/api/broadcasts/:id/send', requireAuth(['admin','agent']), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
   res.json({ ok: true });
-  sendBroadcast(req.shopDomain, parseInt(req.params.id), req.shop);
+  sendBroadcast(domain, parseInt(req.params.id), db.getShop(domain));
 });
 
 // ── Agents ─────────────────────────────────────────────────────────────────────
-app.get('/api/agents', requireShop, function(req, res) { res.json(db.getAgents(req.shopDomain)); });
-app.post('/api/agents', requireShop, function(req, res) { res.json(db.addAgent(req.shopDomain, req.body)); });
+app.get('/api/agents', requireAuth(), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.json([]);
+  res.json(db.getAgents(domain));
+});
+app.post('/api/agents', requireAuth(['admin']), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.status(400).json({error:'No active shop'});
+  res.json(db.addAgent(domain, req.body));
+});
 
 // ── Analytics ──────────────────────────────────────────────────────────────────
-app.get('/api/analytics', requireShop, function(req, res) { res.json(db.getAnalytics(req.shopDomain, parseInt(req.query.days) || 7)); });
+app.get('/api/analytics', requireAuth(), function(req, res) {
+  var domain = getActiveShop(req); if(!domain) return res.json({inbound:0,totalOrders:0,escalated:0,totalRevenue:0});
+  res.json(db.getAnalytics(domain, parseInt(req.query.days) || 7));
+});
 
 // ── WhatsApp webhooks ──────────────────────────────────────────────────────────
 app.get('/webhook/whatsapp', function(req, res) {
