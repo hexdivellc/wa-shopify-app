@@ -607,10 +607,22 @@ input:checked+.toggle-slider:before{transform:translateX(14px);background:#000}
         <option value="default">Other</option>
       </select>
     </div>
-    <div class="form-group"><div class="form-label">WhatsApp Phone Number ID</div><input class="form-input" id="sh-wapid" placeholder="From Meta dashboard"></div>
-    <div class="form-group"><div class="form-label">WhatsApp Access Token</div><input class="form-input" id="sh-watok" type="password" placeholder="Permanent token"></div>
-    <div class="form-group"><div class="form-label">WhatsApp Verify Token</div><input class="form-input" id="sh-wavt" placeholder="e.g. keshya2025"></div>
-    <div class="form-group"><div class="form-label">Shopify Admin API Token (for catalog sync)</div><input class="form-input" id="sh-sftoken" type="password" placeholder="shpat_..."></div>
+    <div class="form-group"><div class="form-label">WhatsApp Provider</div>
+      <select class="form-input" id="sh-provider" onchange="toggleWAFields()">
+        <option value="wati">WATI (wati.io) — recommended</option>
+        <option value="meta">Meta Cloud API</option>
+      </select>
+    </div>
+    <div id="wati-fields">
+      <div class="form-group"><div class="form-label">WATI API Endpoint</div><input class="form-input" id="sh-wati-ep" placeholder="https://live-server-XXXXX.wati.io"></div>
+      <div class="form-group"><div class="form-label">WATI API Token</div><input class="form-input" id="sh-wati-tok" type="password" placeholder="From WATI Settings → API"></div>
+      <div style="font-size:11px;color:var(--hint);margin-bottom:10px">WATI Webhook URL: <span style="color:var(--blue);font-family:monospace;font-size:10px" id="shop-webhook-url"></span></div>
+    </div>
+    <div id="meta-fields" style="display:none">
+      <div class="form-group"><div class="form-label">WhatsApp Phone Number ID</div><input class="form-input" id="sh-wapid" placeholder="From Meta dashboard"></div>
+      <div class="form-group"><div class="form-label">WhatsApp Access Token</div><input class="form-input" id="sh-watok" type="password" placeholder="Permanent token"></div>
+      <div class="form-group"><div class="form-label">WhatsApp Verify Token</div><input class="form-input" id="sh-wavt" placeholder="e.g. keshya2025"></div>
+    </div>
     <div class="form-group"><div class="form-label">AI Provider</div>
       <select class="form-input" id="sh-aip">
         <option value="gemini">Gemini (free)</option>
@@ -1393,10 +1405,31 @@ function loadShopsPage(){
   }).catch(function(){});
 }
 
+function toggleWAFields(){
+  var p = document.getElementById('sh-provider').value;
+  document.getElementById('wati-fields').style.display = p==='wati'?'block':'none';
+  document.getElementById('meta-fields').style.display = p==='meta'?'block':'none';
+}
+
 function saveShop(){
-  var domain=document.getElementById('sh-domain').value.trim();
+  var domain = document.getElementById('sh-domain').value.trim();
   if(!domain){alert('Shop domain required');return;}
-  api('POST','/api/shops',{shop_domain:domain,brand:document.getElementById('sh-brand').value,wa_phone_id:document.getElementById('sh-wapid').value,wa_token:document.getElementById('sh-watok').value,wa_verify_token:document.getElementById('sh-wavt').value,shopify_token:document.getElementById('sh-sftoken').value,ai_provider:document.getElementById('sh-aip').value,gemini_key:document.getElementById('sh-gem').value}).then(function(){
+  var provider = document.getElementById('sh-provider').value;
+  var data = {
+    shop_domain: domain,
+    brand: document.getElementById('sh-brand').value,
+    ai_provider: document.getElementById('sh-aip').value,
+    gemini_key: document.getElementById('sh-gem').value,
+  };
+  if(provider === 'wati'){
+    data.wati_endpoint = document.getElementById('sh-wati-ep').value;
+    data.wati_token = document.getElementById('sh-wati-tok').value;
+  } else {
+    data.wa_phone_id = document.getElementById('sh-wapid').value;
+    data.wa_token = document.getElementById('sh-watok').value;
+    data.wa_verify_token = document.getElementById('sh-wavt').value;
+  }
+  api('POST','/api/shops',data).then(function(){
     closeModal('add-shop-modal'); loadShopsPage(); loadShops();
     if(!ACTIVE_SHOP) setActiveShop(domain);
   }).catch(function(e){alert('Error: '+e.message);});

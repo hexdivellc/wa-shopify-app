@@ -260,7 +260,8 @@ const migrations = [
   "ALTER TABLE team_members ADD COLUMN shop_domain TEXT DEFAULT '*'",
   "ALTER TABLE shops ADD COLUMN shop_name TEXT",
   "ALTER TABLE shops ADD COLUMN active INTEGER DEFAULT 1",
-  // Fix existing admin account
+  "ALTER TABLE shops ADD COLUMN wati_endpoint TEXT",
+  "ALTER TABLE shops ADD COLUMN wati_token TEXT",
   "UPDATE team_members SET must_change_pw=0 WHERE email='admin@wabot.com' AND must_change_pw=1",
 ];
 for (const sql of migrations) {

@@ -92,9 +92,20 @@ app.get('/api/shops', requireAuth(), function(req, res) {
 });
 
 app.post('/api/shops', requireAuth(['admin']), function(req, res) {
-  const { shop_domain, brand, wa_token, wa_phone_id, wa_verify_token, ai_provider, anthropic_key, openai_key, gemini_key, shopify_token, name } = req.body;
+  const { shop_domain, brand, wa_token, wa_phone_id, wa_verify_token, ai_provider, anthropic_key, openai_key, gemini_key, shopify_token, name, wati_endpoint, wati_token } = req.body;
   if (!shop_domain) return res.status(400).json({ error: 'shop_domain required' });
-  db.upsertShop(shop_domain, { brand: brand||'default', wa_token, wa_phone_id, wa_verify_token, ai_provider: ai_provider||'gemini', anthropic_key, openai_key, gemini_key, access_token: shopify_token, shop_name: name });
+  const data = { brand: brand||'default', ai_provider: ai_provider||'gemini' };
+  if (wa_token) data.wa_token = wa_token;
+  if (wa_phone_id) data.wa_phone_id = wa_phone_id;
+  if (wa_verify_token) data.wa_verify_token = wa_verify_token;
+  if (anthropic_key) data.anthropic_key = anthropic_key;
+  if (openai_key) data.openai_key = openai_key;
+  if (gemini_key) data.gemini_key = gemini_key;
+  if (shopify_token) data.access_token = shopify_token;
+  if (name) data.shop_name = name;
+  if (wati_endpoint) data.wati_endpoint = wati_endpoint;
+  if (wati_token) data.wati_token = wati_token;
+  db.upsertShop(shop_domain, data);
   res.json({ ok: true });
 });
 
@@ -262,27 +273,65 @@ app.get('/api/analytics', requireAuth(), function(req, res) {
   res.json(db.getAnalytics(domain, parseInt(req.query.days) || 7));
 });
 
-// ── WhatsApp webhooks ──────────────────────────────────────────────────────────
+// ── WhatsApp webhooks — supports WATI and Meta Cloud API ──────────────────────
+
+// WATI webhook (POST only — no verification needed)
+app.post('/webhook/wati', async function(req, res) {
+  try {
+    res.sendStatus(200);
+    const body = req.body;
+    // WATI sends: { waId, senderName, text, type, ... }
+    if (!body || body.type !== 'text' || !body.waId) return;
+    const phone = body.waId;
+    const text  = body.text;
+    const name  = body.senderName || 'there';
+    // Find shop by WATI endpoint (match any shop with wati_token set)
+    const shop = db.db.prepare("SELECT * FROM shops WHERE wati_token IS NOT NULL AND wati_token != '' LIMIT 1").get();
+    if (!shop) return console.warn('No WATI shop configured');
+    // Build message object in Meta-compatible format
+    const message = { from: phone, text: { body: text }, type: 'text' };
+    const contact = { profile: { name } };
+    await handleIncomingMessage(shop.shop_domain, message, contact, shop);
+  } catch(e) { console.error('WATI webhook error:', e); }
+});
+
+// Meta Cloud API webhook verification
 app.get('/webhook/whatsapp', function(req, res) {
-  const token = req.query['hub.verify_token'];
+  const token     = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   const shop = db.db.prepare('SELECT * FROM shops WHERE wa_verify_token = ?').get(token);
   if (req.query['hub.mode'] === 'subscribe' && shop) return res.status(200).send(challenge);
-  res.sendStatus(403);
+  // Also accept WATI verification (it sends a simple GET)
+  res.sendStatus(200);
 });
 
+// Meta Cloud API incoming messages
 app.post('/webhook/whatsapp', async function(req, res) {
   try {
     res.sendStatus(200);
-    const value = req.body.entry && req.body.entry[0] && req.body.entry[0].changes && req.body.entry[0].changes[0] && req.body.entry[0].changes[0].value;
+
+    // ── Try WATI format first ──────────────────────────────────────────────────
+    const body = req.body;
+    if (body && body.waId && body.type === 'text') {
+      const shop = db.db.prepare("SELECT * FROM shops WHERE wati_token IS NOT NULL AND wati_token != '' LIMIT 1").get();
+      if (shop) {
+        const message = { from: body.waId, text: { body: body.text }, type: 'text' };
+        const contact = { profile: { name: body.senderName || 'there' } };
+        await handleIncomingMessage(shop.shop_domain, message, contact, shop);
+        return;
+      }
+    }
+
+    // ── Meta Cloud API format ──────────────────────────────────────────────────
+    const value = body.entry?.[0]?.changes?.[0]?.value;
     if (!value) return;
     const messages = value.messages;
     const contacts = value.contacts;
-    const phoneId = value.metadata && value.metadata.phone_number_id;
-    if (!messages || !messages.length || messages[0].type !== 'text') return;
+    const phoneId  = value.metadata?.phone_number_id;
+    if (!messages?.length || messages[0].type !== 'text') return;
     const shop = phoneId ? db.db.prepare('SELECT * FROM shops WHERE wa_phone_id = ?').get(phoneId) : null;
     if (!shop) return console.warn('No shop for phone ID:', phoneId);
-    await handleIncomingMessage(shop.shop_domain, messages[0], contacts && contacts[0], shop);
+    await handleIncomingMessage(shop.shop_domain, messages[0], contacts?.[0], shop);
   } catch(e) { console.error('WA webhook error:', e); }
 });
 
