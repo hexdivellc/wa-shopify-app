@@ -1026,7 +1026,7 @@ function renderProducts(ps){
     return '<div class="product-card"><div class="product-img">&#128230;</div>'
       +'<div class="product-body"><div class="product-name">'+e(p.name)+'</div>'
       +'<div class="product-price">Rs.'+n(minP)+'+</div>'
-      +'<div class="product-meta">'+vs.length+' variant'+(vs.length!==1?'s:'':':')+' '+vs.map(function(v){return v.name;}).join(', ')+'</div></div></div>';
+      +'<div class="product-meta">'+vs.length+(vs.length!==1?' variants':' variant')+': '+vs.map(function(v){return v.name;}).join(', ')+'</div></div></div>';
   }).join('');
 }
 
