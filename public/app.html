@@ -21,7 +21,7 @@
   --accent:#25D366;--accent-dark:#1da851;
   --radius:10px;--radius-sm:7px;--radius-lg:14px;
 }
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;font-size:13px;overflow:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;font-size:13px}
 
 /* Login screen */
 #login-screen{display:flex;align-items:center;justify-content:center;flex:1;background:var(--bg)}
@@ -260,7 +260,7 @@ input:checked+.toggle-slider:before{transform:translateX(14px);background:#000}
 <body>
 
 <!-- Login Screen -->
-<div id="login-screen">
+<div id="login-screen" style="display:flex;align-items:center;justify-content:center;flex:1;background:var(--bg);min-height:100vh">
   <div class="login-card">
     <div class="login-logo">&#9889; WA Bot</div>
     <div class="login-sub">Sign in to your dashboard</div>
@@ -787,18 +787,21 @@ function showLogin(){
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('change-pw-screen').style.display='none';
   document.getElementById('app').style.display='none';
+  document.body.style.overflow='auto';
 }
 
 function showChangePw(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('change-pw-screen').style.display='flex';
   document.getElementById('app').style.display='none';
+  document.body.style.overflow='auto';
 }
 
 function showApp(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('change-pw-screen').style.display='none';
   document.getElementById('app').style.display='flex';
+  document.body.style.overflow='hidden';
   loadShops().then(function(){ loadAll(); });
   setInterval(function(){ if(curView==='chats')loadChats(); if(curSideTab==='orders')loadOrders(); },15000);
 }
@@ -915,8 +918,8 @@ function toggleShopMenu(){
   var m=document.getElementById('shop-menu');
   m.style.display=m.style.display==='none'?'block':'none';
 }
-function closeShopMenu(){ document.getElementById('shop-menu').style.display='none'; }
-document.addEventListener('click',function(e){ if(!document.getElementById('shop-switcher').contains(e.target)) closeShopMenu(); });
+function closeShopMenu(){ var m=document.getElementById('shop-menu'); if(m) m.style.display='none'; }
+document.addEventListener('click',function(e){ var sw=document.getElementById('shop-switcher'); if(sw&&!sw.contains(e.target)) closeShopMenu(); });
 
 // ── API helper ─────────────────────────────────────────────────────────────────
 function api(method, url, body){
